@@ -1,0 +1,22 @@
+%% -*- erlang -*-
+{application, riak_mesos_director,
+ [
+  {description, "Riak Mesos client agent"},
+  {vsn, git},
+  {registered, []},
+  {modules, []},
+  {applications, [
+                  kernel,
+                  stdlib,
+                  inets,
+                  crypto,
+                  mochiweb,
+                  webmachine,
+                  lager,
+                  erlzk
+                 ]},
+  {mod, { rmd_app, []}},
+  {env, [
+      {listener, {"127.0.0.1", 9000}}
+  ]}
+ ]}.
