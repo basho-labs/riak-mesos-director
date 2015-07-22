@@ -12,7 +12,13 @@ make rel
 
 ```
 ...
-listener.http = 0.0.0.0:9000
+## HTTP proxy for Riak
+listener.proxy.http = 0.0.0.0:8098
+## Protobuf proxy for Riak
+listener.proxy.protobuf = 0.0.0.0:8087
+## HTTP listener for director API
+listener.web.http = 0.0.0.0:9000
+## Zookeeper address
 zookeeper.address = 33.33.33.2:2181
 ...
 ```

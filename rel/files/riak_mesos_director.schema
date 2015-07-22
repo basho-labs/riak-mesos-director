@@ -16,7 +16,7 @@
 
 %% @doc HTTP listener for director API
 {mapping, "listener.web.http", "riak_mesos_director.listenter_web_http", [
-  {default, {"{{riak_mesos_director_http_ip}}" , {{riak_mesos_director_http_port}} }},
+  {default, {"{{riak_mesos_director_web_http_ip}}" , {{riak_mesos_director_web_http_port}} }},
   {datatype, ip},
   {validators, ["valid_host"]}
 ]}.
