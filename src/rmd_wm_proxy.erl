@@ -18,7 +18,7 @@
 %%
 %% -------------------------------------------------------------------
 
--module(rmd_wm_base).
+-module(rmd_wm_proxy).
 -export([routes/0, dispatch/0]).
 -export([init/1]).
 -export([service_available/2,
@@ -27,17 +27,21 @@
          resource_exists/2,
          provide_content/2]).
 
--record(ctx, {response=undefined}).
+-record(ctx, {framework, cluster, response=undefined}).
 
 -include_lib("webmachine/include/webmachine.hrl").
 -include("riak_mesos_director.hrl").
+
+-define(synchronize_nodes(Framework, Cluster),
+    #ctx{framework=Framework, cluster=Cluster}).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
 
 routes() ->
-     [[?RMD_BASE_ROUTE] ++ ["ping"]].
+     [[?RMD_BASE_ROUTE] ++ ["frameworks"] ++ [framework] ++ ["clusters"] ++
+        [cluster] ++ ["synchronize_nodes"]].
 
 dispatch() -> lists:map(fun(Route) -> {Route, ?MODULE, []} end, routes()).
 
@@ -48,8 +52,13 @@ dispatch() -> lists:map(fun(Route) -> {Route, ?MODULE, []} end, routes()).
 init(_) ->
     {ok, #ctx{}}.
 
-service_available(RD, Ctx) ->
-    {true, RD, Ctx}.
+service_available(RD, Ctx0) ->
+    Ctx1 = Ctx0#ctx{
+        framework = wrq:path_info(framework, RD),
+        cluster = wrq:path_info(cluster, RD)},
+
+    lager:info("CTX: ~p~n", [Ctx1]),
+    {true, RD, Ctx1}.
 
 allowed_methods(RD, Ctx) ->
     Methods = ['GET'],
@@ -59,9 +68,11 @@ content_types_provided(RD, Ctx) ->
     Types = [{"application/json", provide_content}],
     {Types, RD, Ctx}.
 
+resource_exists(RD, Ctx=?synchronize_nodes(Framework, Cluster)) ->
+    Response = [{synchronize_nodes, rmd_proxy:synchronize_nodes(Framework, Cluster)}],
+    {true, RD, Ctx#ctx{response=Response}};
 resource_exists(RD, Ctx) ->
-    Response = riak_mesos_director:ping(),
-    {true, RD, Ctx#ctx{response=Response}}.
+    {false, RD, Ctx}.
 
 provide_content(RD, Ctx=#ctx{response=Response}) ->
     render_json(Response, RD, Ctx).

@@ -48,3 +48,44 @@ Should return:
     ]
 }
 ```
+
+```
+curl 'http://localhost:9000/director/frameworks/riak-mesos-go6/clusters/mycluster/synchronize_nodes'
+```
+
+Should return:
+
+```
+{
+    "synchronize_nodes": {
+        "added": {
+            "http": "mycluster-32c28cff-5f9f-475c-9a3b-4b0bd4e51829-66@ubuntu.local",
+            "protobuf": "mycluster-32c28cff-5f9f-475c-9a3b-4b0bd4e51829-66@ubuntu.local"
+        },
+        "removed": []
+    }
+}
+```
+
+Running the same command again should return:
+
+```
+{
+    "synchronize_nodes": {
+        "added": [],
+        "removed": []
+    }
+}
+```
+
+Local port 8098 should now proxy to the pool of available nodes
+
+```
+curl 'http://localhost:8098/ping'
+```
+
+Should return:
+
+```
+OK
+```

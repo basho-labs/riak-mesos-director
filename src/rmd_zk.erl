@@ -53,6 +53,7 @@ get_riak_clusters(Framework) ->
 get_riak_cluster(Framework, Cluster) ->
     gen_server:call(?MODULE, {get_riak_cluster, Framework, Cluster}).
 
+%% TODO: Add a watch here to continually monitor nodes, not just on demand
 get_riak_nodes(Framework, Cluster) ->
     gen_server:call(?MODULE, {get_riak_nodes, Framework, Cluster}).
 

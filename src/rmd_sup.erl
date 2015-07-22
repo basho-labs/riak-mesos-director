@@ -122,5 +122,6 @@ dispatch([M | Rest], Accum) ->
 resources() ->
     [
         rmd_wm_base,
-        rmd_wm_node
+        rmd_wm_zk,
+        rmd_wm_proxy
     ].
