@@ -38,18 +38,34 @@ start_link() ->
 %%%===================================================================
 
 init([]) ->
+    application:set_env(balance, initial_be_list, []),
+    HTTP_PROXY = {balance_http,
+        {bal_proxy, start_link, [proxy_http_config()]},
+        permanent, 5000, worker, [bal_proxy, tcp_proxy]},
+    PROTOBUF_PROXY = {balance_protobuf,
+        {bal_proxy, start_link, [proxy_protobuf_config()]},
+        permanent, 5000, worker, [bal_proxy, tcp_proxy]},
     RMD_ZK = {rmd_zk,
           {rmd_zk, start_link, [zk_config()]},
           permanent, 5000, worker, [rmd_zk]},
     Web = {webmachine_mochiweb,
            {webmachine_mochiweb, start, [web_config()]},
            permanent, 5000, worker, [mochiweb_socket_server]},
-    Processes = [RMD_ZK, Web],
+    Processes = [HTTP_PROXY, PROTOBUF_PROXY, RMD_ZK, Web],
+    % Processes = [HTTP_PROXY, RMD_ZK, Web],
     {ok, { {one_for_one, 10, 10}, Processes} }.
 
 %%%===================================================================
 %%% Private
 %%%===================================================================
+
+proxy_http_config() ->
+    {Ip, Port} = proxy_http_host_port(),
+    [balance_http, Ip, Port, 5*1000,180*1000].
+
+proxy_protobuf_config() ->
+    {Ip, Port} = proxy_protobuf_host_port(),
+    [balance_protobuf, Ip, Port, 5*1000,180*1000].
 
 zk_config() ->
     {Ip, Port} = zk_host_port(),
@@ -79,9 +95,21 @@ zk_host_port() ->
     end.
 
 web_host_port() ->
-    case application:get_env(riak_mesos_director, listenter_http) of
+    case application:get_env(riak_mesos_director, listenter_web_http) of
         {ok, {_, _} = HostPort} -> HostPort;
         undefined -> {"0.0.0.0", 9000}
+    end.
+
+proxy_http_host_port() ->
+    case application:get_env(riak_mesos_director, listenter_proxy_http) of
+        {ok, {_, _} = HostPort} -> HostPort;
+        undefined -> {"0.0.0.0", 8098}
+    end.
+
+proxy_protobuf_host_port() ->
+    case application:get_env(riak_mesos_director, listenter_proxy_protobuf) of
+        {ok, {_, _} = HostPort} -> HostPort;
+        undefined -> {"0.0.0.0", 8087}
     end.
 
 dispatch() -> lists:flatten(dispatch(resources(), [])).

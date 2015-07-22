@@ -1,13 +1,27 @@
 %%-*- mode: erlang -*-
 
-%% @doc http listen port and IP address
-{mapping, "listener.http", "riak_mesos_director.listenter_http", [
+%% @doc HTTP proxy for Riak
+{mapping, "listener.proxy.http", "riak_mesos_director.listenter_proxy_http", [
+  {default, {"{{riak_mesos_director_proxy_http_ip}}" , {{riak_mesos_director_proxy_http_port}} }},
+  {datatype, ip},
+  {validators, ["valid_host"]}
+]}.
+
+%% @doc Protobuf proxy for Riak
+{mapping, "listener.proxy.protobuf", "riak_mesos_director.listenter_proxy_protobuf", [
+  {default, {"{{riak_mesos_director_proxy_protobuf_ip}}" , {{riak_mesos_director_proxy_protobuf_port}} }},
+  {datatype, ip},
+  {validators, ["valid_host"]}
+]}.
+
+%% @doc HTTP listener for director API
+{mapping, "listener.web.http", "riak_mesos_director.listenter_web_http", [
   {default, {"{{riak_mesos_director_http_ip}}" , {{riak_mesos_director_http_port}} }},
   {datatype, ip},
   {validators, ["valid_host"]}
 ]}.
 
-%% @doc http listen port and IP address
+%% @doc Zookeeper address
 {mapping, "zookeeper.address", "riak_mesos_director.zk_address", [
   {default, {"{{riak_mesos_director_zookeeper_ip}}" , {{riak_mesos_director_zookeeper_port}} }},
   {datatype, ip},
