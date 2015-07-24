@@ -48,11 +48,7 @@ init([]) ->
     RMD_ZK = {rmd_zk,
           {rmd_zk, start_link, [zk_config()]},
           permanent, 5000, worker, [rmd_zk]},
-    Web = {webmachine_mochiweb,
-           {webmachine_mochiweb, start, [web_config()]},
-           permanent, 5000, worker, [mochiweb_socket_server]},
-    Processes = [HTTP_PROXY, PROTOBUF_PROXY, RMD_ZK, Web],
-    % Processes = [HTTP_PROXY, RMD_ZK, Web],
+    Processes = [HTTP_PROXY, PROTOBUF_PROXY, RMD_ZK],
     {ok, { {one_for_one, 10, 10}, Processes} }.
 
 %%%===================================================================
@@ -69,24 +65,7 @@ proxy_protobuf_config() ->
 
 zk_config() ->
     {Ip, Port} = zk_host_port(),
-    [Ip, Port].
-
-web_config() ->
-    {Ip, Port} = web_host_port(),
-    WebConfig0 = [
-        {ip, Ip},
-        {port, Port},
-        {nodelay, true},
-        {log_dir, "log"},
-        {dispatch, dispatch()}
-    ],
-    WebConfig1 = case application:get_env(riak_mesos_director, ssl) of
-        {ok, SSLOpts} ->
-            WebConfig0 ++ [{ssl, true}, {ssl_opts, SSLOpts}];
-        undefined ->
-            WebConfig0
-    end,
-    WebConfig1.
+    [Ip, Port, framework_name(), cluster_name()].
 
 zk_host_port() ->
     case application:get_env(riak_mesos_director, zk_address) of
@@ -94,10 +73,16 @@ zk_host_port() ->
         undefined -> {"33.33.33.2", 2181}
     end.
 
-web_host_port() ->
-    case application:get_env(riak_mesos_director, listenter_web_http) of
-        {ok, {_, _} = HostPort} -> HostPort;
-        undefined -> {"0.0.0.0", 9000}
+framework_name() ->
+    case application:get_env(riak_mesos_director, framework_name) of
+        {ok, FrameworkName} -> FrameworkName;
+        undefined -> exit("framework.name is a required value in riak_mesos_director.conf")
+    end.
+
+cluster_name() ->
+    case application:get_env(riak_mesos_director, cluster_name) of
+        {ok, ClusterName} -> ClusterName;
+        undefined -> exit("framework.cluster is a required value in riak_mesos_director.conf")
     end.
 
 proxy_http_host_port() ->
@@ -111,17 +96,3 @@ proxy_protobuf_host_port() ->
         {ok, {_, _} = HostPort} -> HostPort;
         undefined -> {"0.0.0.0", 8087}
     end.
-
-dispatch() -> lists:flatten(dispatch(resources(), [])).
-
-dispatch([], Accum) ->
-    lists:reverse(Accum);
-dispatch([M | Rest], Accum) ->
-    dispatch(Rest, [M:dispatch() | Accum]).
-
-resources() ->
-    [
-        rmd_wm_base,
-        rmd_wm_zk,
-        rmd_wm_proxy
-    ].

@@ -19,29 +19,18 @@
 %% -------------------------------------------------------------------
 
 -module(riak_mesos_director).
--export([ping/0]).
+-behaviour(application).
+
+-export([start/2, stop/1]).
 
 -include("riak_mesos_director.hrl").
 
--ifdef(TEST).
--include_lib("eunit/include/eunit.hrl").
--endif.
-
 %%%===================================================================
-%%% API
+%%% Callbacks
 %%%===================================================================
 
-ping() ->
-    [{ping,<<"pong">>}].
+start(_Type, _StartArgs) ->
+    rmd_sup:start_link().
 
-%%%===================================================================
-%%% Private
-%%%===================================================================
-
--ifdef(TEST).
-
-ping_test() ->
-    Expected = [{ping,<<"pong">>}],
-    ?assertEqual(Expected, ping()).
-
--endif.
+stop(_State) ->
+    ok.

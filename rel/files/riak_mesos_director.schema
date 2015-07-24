@@ -14,13 +14,6 @@
   {validators, ["valid_host"]}
 ]}.
 
-%% @doc HTTP listener for director API
-{mapping, "listener.web.http", "riak_mesos_director.listenter_web_http", [
-  {default, {"{{riak_mesos_director_web_http_ip}}" , {{riak_mesos_director_web_http_port}} }},
-  {datatype, ip},
-  {validators, ["valid_host"]}
-]}.
-
 %% @doc Zookeeper address
 {mapping, "zookeeper.address", "riak_mesos_director.zk_address", [
   {default, {"{{riak_mesos_director_zookeeper_ip}}" , {{riak_mesos_director_zookeeper_port}} }},
@@ -28,25 +21,21 @@
   {validators, ["valid_host"]}
 ]}.
 
+%% @doc Riak Mesos Framework instance name
+{mapping, "framework.name", "riak_mesos_director.framework_name", [
+  {default, "{{riak_mesos_director_framework_name}}"}
+]}.
+
+%% @doc Riak Mesos Framework cluster name
+{mapping, "framework.cluster", "riak_mesos_director.cluster_name", [
+  {default, "{{riak_mesos_director_cluster_name}}"}
+]}.
+
 %% @doc Cookie for distributed node communication.  All nodes in the
 %% same cluster should use the same cookie or they will not be able to
 %% communicate.
 {mapping, "distributed_cookie", "vm_args.-setcookie", [
   {default, "riak"}
-]}.
-
-%% @doc Default cert location for https can be overridden
-%% with the ssl config variable, for example:
-{mapping, "ssl.certfile", "riak_mesos_director.ssl.certfile", [
-  {datatype, file},
-  {commented, "$(platform_etc_dir)/cert.pem"}
-]}.
-
-%% @doc Default key location for https can be overridden with the ssl
-%% config variable, for example:
-{mapping, "ssl.keyfile", "riak_mesos_director.ssl.keyfile", [
-  {datatype, file},
-  {commented, "$(platform_etc_dir)/key.pem"}
 ]}.
 
 %% @doc Platform-specific installation paths
