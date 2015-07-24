@@ -8,7 +8,7 @@ make rel
 
 ## Configure
 
-`rel/riak_mesos_director/etc/riak_mesos_director.conf`
+`rel/riak_mesos_director/etc/director.conf`
 
 ```
 ...

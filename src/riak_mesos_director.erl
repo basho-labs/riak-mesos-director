@@ -23,14 +23,57 @@
 
 -export([start/2, stop/1]).
 
+-export([zk_host_port/0,
+         framework_name/0,
+         cluster_name/0,
+         proxy_http_host_port/0,
+         proxy_protobuf_host_port/0]).
+
 -include("riak_mesos_director.hrl").
+
+%%%===================================================================
+%%% API
+%%%===================================================================
+
+zk_host_port() ->
+    case application:get_env(riak_mesos_director, zk_address) of
+        {ok, {_, _} = HostPort} -> HostPort;
+        undefined -> {"33.33.33.2", 2181}
+    end.
+
+framework_name() ->
+    case application:get_env(riak_mesos_director, framework_name) of
+        {ok, FrameworkName} -> FrameworkName;
+        undefined -> exit("framework.name is a required value in director.conf")
+    end.
+
+cluster_name() ->
+    case application:get_env(riak_mesos_director, cluster_name) of
+        {ok, ClusterName} -> ClusterName;
+        undefined -> exit("framework.cluster is a required value in director.conf")
+    end.
+
+proxy_http_host_port() ->
+    case application:get_env(riak_mesos_director, listenter_proxy_http) of
+        {ok, {_, _} = HostPort} -> HostPort;
+        undefined -> {"0.0.0.0", 8098}
+    end.
+
+proxy_protobuf_host_port() ->
+    case application:get_env(riak_mesos_director, listenter_proxy_protobuf) of
+        {ok, {_, _} = HostPort} -> HostPort;
+        undefined -> {"0.0.0.0", 8087}
+    end.
 
 %%%===================================================================
 %%% Callbacks
 %%%===================================================================
 
 start(_Type, _StartArgs) ->
-    rmd_sup:start_link().
+    {ok, Pid} = rmd_sup:start_link(),
+    rmd_cli:load_schema(),
+    rmd_cli:register(),
+    {ok, Pid}.
 
 stop(_State) ->
     ok.

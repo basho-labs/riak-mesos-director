@@ -18,17 +18,18 @@
 %%
 %% -------------------------------------------------------------------
 
--module(rmd_zk).
+-module(rmd_server).
 -behaviour(gen_server).
 
 -export([start_link/1]).
 -export([get_zk_frameworks/0,
-         get_zk_framework/1,
-         get_riak_clusters/1,
-         get_riak_cluster/2,
-         get_riak_nodes/2,
-         synchronize_riak_nodes/2,
-         watch_riak_nodes/2]).
+         get_zk_framework/0,get_zk_framework/1,
+         get_riak_clusters/0,get_riak_clusters/1,
+         get_riak_cluster/0,get_riak_cluster/2,
+         get_riak_nodes/0,get_riak_nodes/2,
+         synchronize_riak_nodes/0,synchronize_riak_nodes/2,
+         watch_riak_nodes/0,watch_riak_nodes/2,
+         get_proxy_status/0]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
 
 -include("riak_mesos_director.hrl").
@@ -46,20 +47,35 @@ start_link(Args) ->
 
 get_zk_frameworks() ->
     gen_server:call(?MODULE, {get_zk_frameworks}).
+get_zk_framework() ->
+    get_zk_framework(riak_mesos_director:framework_name()).
 get_zk_framework(Framework) ->
     gen_server:call(?MODULE, {get_zk_framework, Framework}).
 
+get_riak_clusters() ->
+    get_riak_clusters(riak_mesos_director:framework_name()).
 get_riak_clusters(Framework) ->
     gen_server:call(?MODULE, {get_riak_clusters, Framework}).
+get_riak_cluster() ->
+    get_riak_cluster(riak_mesos_director:framework_name(), riak_mesos_director:cluster_name()).
 get_riak_cluster(Framework, Cluster) ->
     gen_server:call(?MODULE, {get_riak_cluster, Framework, Cluster}).
 
+get_riak_nodes() ->
+    get_riak_nodes(riak_mesos_director:framework_name(), riak_mesos_director:cluster_name()).
 get_riak_nodes(Framework, Cluster) ->
     gen_server:call(?MODULE, {get_riak_nodes, Framework, Cluster}).
+synchronize_riak_nodes() ->
+    synchronize_riak_nodes(riak_mesos_director:framework_name(), riak_mesos_director:cluster_name()).
 synchronize_riak_nodes(Framework, Cluster) ->
-    gen_server:cast(?MODULE, {synchronize_riak_nodes, Framework, Cluster}).
+    gen_server:call(?MODULE, {synchronize_riak_nodes, Framework, Cluster}).
+watch_riak_nodes() ->
+    watch_riak_nodes(riak_mesos_director:framework_name(), riak_mesos_director:cluster_name()).
 watch_riak_nodes(Framework, Cluster) ->
     gen_server:cast(?MODULE, {watch_riak_nodes, Framework, Cluster}).
+
+get_proxy_status() ->
+    gen_server:call(?MODULE, {get_proxy_status}).
 
 %%%===================================================================
 %%% Callbacks
@@ -92,15 +108,50 @@ handle_call({get_riak_nodes, Framework, Cluster}, _From, State=#state{zk=ZK}) ->
     ZKNode = coordinated_nodes_zknode(Framework, Cluster),
     Nodes = do_get_riak_nodes(ZK, ZKNode),
     {reply, Nodes, State};
+handle_call({get_proxy_status}, _From, State) ->
+    F1 = fun(St, Acc0) ->
+        F2 = fun(Node, Acc1) ->
+            N = [{id, Node#be.id},
+            {name, list_to_binary(Node#be.name)},
+            {port, Node#be.port},
+            {status, Node#be.status},
+            {maxconn, Node#be.maxconn},
+            {pendconn, Node#be.pendconn},
+            {actconn, Node#be.actconn},
+            {lasterr, Node#be.lasterr},
+            {lasterrtime, Node#be.lasterrtime},
+            {act_count, Node#be.act_count},
+            {act_time, Node#be.act_time}],
+            % {pidlist, Node#be.pidlist}],
+            [N|Acc1]
+        end,
+        Nodes = lists:foldl(F2, [], St#bp_state.be_list),
+
+        P = [{name, St#bp_state.register_name},
+        {local_ip, list_to_binary(St#bp_state.local_ip)},
+        {local_port, St#bp_state.local_port},
+        {conn_timeout, St#bp_state.conn_timeout},
+        {act_timeout, St#bp_state.act_timeout},
+        {nodes, Nodes}],
+        % {acceptor, St#bp_state.acceptor},
+        % {start_time, St#bp_state.start_time},
+        % {to_timer, St#bp_state.to_timer},
+        % {wait_list, St#bp_state.wait_list}],
+        [P|Acc0]
+    end,
+    Status = lists:foldl(F1, [], [
+        bal_proxy:get_state(balance_http),
+        bal_proxy:get_state(balance_protobuf)]),
+    {reply, Status, State};
+handle_call({synchronize_riak_nodes, Framework, Cluster}, _From, State=#state{zk=ZK}) ->
+    ZKNode = coordinated_nodes_zknode(Framework, Cluster),
+    Changes = do_synchronize_riak_nodes(ZK, ZKNode),
+    lager:info("Synchronized Riak nodes, changes: ~p", [Changes]),
+    {reply, Changes, State};
 handle_call(Message, _From, State) ->
     lager:error("Received undefined message in call: ~p", [Message]),
     {reply, {error, undefined_message}, State}.
 
-handle_cast({synchronize_riak_nodes, Framework, Cluster}, State=#state{zk=ZK}) ->
-    ZKNode = coordinated_nodes_zknode(Framework, Cluster),
-    Changes = do_synchronize_riak_nodes(ZK, ZKNode),
-    lager:info("Synchronized Riak nodes, changes: ~p", [Changes]),
-    {noreply, State};
 handle_cast({watch_riak_nodes, Framework, Cluster}, State=#state{zk=ZK}) ->
     ZKNode = coordinated_nodes_zknode(Framework, Cluster),
     do_watch_riak_nodes(ZK, ZKNode),
@@ -125,7 +176,7 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 terminate(Reason, _State) ->
-    lager:error("rmd_zk terminated, reason: ~p", [Reason]),
+    lager:error("rmd_server terminated, reason: ~p", [Reason]),
     ok.
 
 %%%===================================================================
@@ -159,8 +210,10 @@ do_get_riak_nodes(ZK, ZKNode0) ->
 
 do_synchronize_riak_nodes(ZK, ZKNode) ->
     AvailableNodes = do_get_riak_nodes(ZK, ZKNode),
-    {state,_,_,_,_,_,ProxyHTTPNodes,_,_,_,_} = bal_proxy:get_state(balance_http),
-    {state,_,_,_,_,_,ProxyPBNodes,_,_,_,_} = bal_proxy:get_state(balance_protobuf),
+    HTTPSt = bal_proxy:get_state(balance_http),
+    ProxyHTTPNodes = HTTPSt#bp_state.be_list,
+    PBSt = bal_proxy:get_state(balance_protobuf),
+    ProxyPBNodes = PBSt#bp_state.be_list,
 
     F1 = fun([{name, NodeName},
               {protobuf,[{host, Host}, {port, PBPort}]},

@@ -11,6 +11,7 @@
                   inets,
                   crypto,
                   lager,
+                  clique,
                   erlzk
                  ]},
   {mod, { riak_mesos_director, []}},

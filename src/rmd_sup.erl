@@ -45,10 +45,10 @@ init([]) ->
     PROTOBUF_PROXY = {balance_protobuf,
         {bal_proxy, start_link, [proxy_protobuf_config()]},
         permanent, 5000, worker, [bal_proxy, tcp_proxy]},
-    RMD_ZK = {rmd_zk,
-          {rmd_zk, start_link, [zk_config()]},
-          permanent, 5000, worker, [rmd_zk]},
-    Processes = [HTTP_PROXY, PROTOBUF_PROXY, RMD_ZK],
+    RMD_SERVER = {rmd_server,
+          {rmd_server, start_link, [zk_config()]},
+          permanent, 5000, worker, [rmd_server]},
+    Processes = [HTTP_PROXY, PROTOBUF_PROXY, RMD_SERVER],
     {ok, { {one_for_one, 10, 10}, Processes} }.
 
 %%%===================================================================
@@ -56,43 +56,13 @@ init([]) ->
 %%%===================================================================
 
 proxy_http_config() ->
-    {Ip, Port} = proxy_http_host_port(),
+    {Ip, Port} = riak_mesos_director:proxy_http_host_port(),
     [balance_http, Ip, Port, 5*1000,180*1000].
 
 proxy_protobuf_config() ->
-    {Ip, Port} = proxy_protobuf_host_port(),
+    {Ip, Port} = riak_mesos_director:proxy_protobuf_host_port(),
     [balance_protobuf, Ip, Port, 5*1000,180*1000].
 
 zk_config() ->
-    {Ip, Port} = zk_host_port(),
-    [Ip, Port, framework_name(), cluster_name()].
-
-zk_host_port() ->
-    case application:get_env(riak_mesos_director, zk_address) of
-        {ok, {_, _} = HostPort} -> HostPort;
-        undefined -> {"33.33.33.2", 2181}
-    end.
-
-framework_name() ->
-    case application:get_env(riak_mesos_director, framework_name) of
-        {ok, FrameworkName} -> FrameworkName;
-        undefined -> exit("framework.name is a required value in riak_mesos_director.conf")
-    end.
-
-cluster_name() ->
-    case application:get_env(riak_mesos_director, cluster_name) of
-        {ok, ClusterName} -> ClusterName;
-        undefined -> exit("framework.cluster is a required value in riak_mesos_director.conf")
-    end.
-
-proxy_http_host_port() ->
-    case application:get_env(riak_mesos_director, listenter_proxy_http) of
-        {ok, {_, _} = HostPort} -> HostPort;
-        undefined -> {"0.0.0.0", 8098}
-    end.
-
-proxy_protobuf_host_port() ->
-    case application:get_env(riak_mesos_director, listenter_proxy_protobuf) of
-        {ok, {_, _} = HostPort} -> HostPort;
-        undefined -> {"0.0.0.0", 8087}
-    end.
+    {Ip, Port} = riak_mesos_director:zk_host_port(),
+    [Ip, Port, riak_mesos_director:framework_name(), riak_mesos_director:cluster_name()].
