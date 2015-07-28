@@ -22,21 +22,18 @@
 -behaviour(gen_server).
 
 -export([start_link/1]).
--export([get_zk_frameworks/0,
-         get_zk_framework/0,get_zk_framework/1,
-         get_riak_clusters/0,get_riak_clusters/1,
-         get_riak_cluster/0,get_riak_cluster/2,
-         get_riak_nodes/0,get_riak_nodes/2,
-         synchronize_riak_nodes/0,synchronize_riak_nodes/2,
-         watch_riak_nodes/0,watch_riak_nodes/2,
-         get_proxy_status/0]).
+-export([get_status/0,
+         configure/2,
+         get_riak_frameworks/0,
+         get_riak_clusters/0,
+         get_riak_nodes/0]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
 
 -include("riak_mesos_director.hrl").
 -include_lib("erlzk/include/erlzk.hrl").
 -include_lib("balance/include/balance.hrl").
 
--record(state, {zk}).
+-record(state, {zk, framework, cluster}).
 
 %%%===================================================================
 %%% API
@@ -45,37 +42,20 @@
 start_link(Args) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, Args, []).
 
-get_zk_frameworks() ->
-    gen_server:call(?MODULE, {get_zk_frameworks}).
-get_zk_framework() ->
-    get_zk_framework(riak_mesos_director:framework_name()).
-get_zk_framework(Framework) ->
-    gen_server:call(?MODULE, {get_zk_framework, Framework}).
+get_status() ->
+    gen_server:call(?MODULE, {get_status}).
+
+configure(Framework, Cluster) ->
+    gen_server:cast(?MODULE, {configure, Framework, Cluster}).
+
+get_riak_frameworks() ->
+    gen_server:call(?MODULE, {get_riak_frameworks}).
 
 get_riak_clusters() ->
-    get_riak_clusters(riak_mesos_director:framework_name()).
-get_riak_clusters(Framework) ->
-    gen_server:call(?MODULE, {get_riak_clusters, Framework}).
-get_riak_cluster() ->
-    get_riak_cluster(riak_mesos_director:framework_name(), riak_mesos_director:cluster_name()).
-get_riak_cluster(Framework, Cluster) ->
-    gen_server:call(?MODULE, {get_riak_cluster, Framework, Cluster}).
+    gen_server:call(?MODULE, {get_riak_clusters}).
 
 get_riak_nodes() ->
-    get_riak_nodes(riak_mesos_director:framework_name(), riak_mesos_director:cluster_name()).
-get_riak_nodes(Framework, Cluster) ->
-    gen_server:call(?MODULE, {get_riak_nodes, Framework, Cluster}).
-synchronize_riak_nodes() ->
-    synchronize_riak_nodes(riak_mesos_director:framework_name(), riak_mesos_director:cluster_name()).
-synchronize_riak_nodes(Framework, Cluster) ->
-    gen_server:call(?MODULE, {synchronize_riak_nodes, Framework, Cluster}).
-watch_riak_nodes() ->
-    watch_riak_nodes(riak_mesos_director:framework_name(), riak_mesos_director:cluster_name()).
-watch_riak_nodes(Framework, Cluster) ->
-    gen_server:cast(?MODULE, {watch_riak_nodes, Framework, Cluster}).
-
-get_proxy_status() ->
-    gen_server:call(?MODULE, {get_proxy_status}).
+    gen_server:call(?MODULE, {get_riak_nodes}).
 
 %%%===================================================================
 %%% Callbacks
@@ -84,31 +64,10 @@ get_proxy_status() ->
 init([ZKHost, ZKPort, Framework, Cluster]) ->
     process_flag(trap_exit, true),
     {ok, ZK} = erlzk:connect([{ZKHost, ZKPort}], 30000),
-    ZKNode = coordinated_nodes_zknode(Framework, Cluster),
-    do_synchronize_riak_nodes(ZK, ZKNode),
-    do_watch_riak_nodes(ZK, ZKNode),
-    {ok, #state{zk=ZK}}.
+    do_configure(ZK, Framework, Cluster),
+    {ok, #state{zk=ZK, framework=Framework, cluster=Cluster}}.
 
-handle_call({get_zk_frameworks}, _From, State=#state{zk=ZK}) ->
-    Children = get_children(ZK, "/riak/frameworks"),
-    {reply, Children, State};
-handle_call({get_zk_framework, Framework}, _From, State=#state{zk=ZK}) ->
-    ZKNode = lists:flatten(io_lib:format("/riak/frameworks/~s",[Framework])),
-    Data = get_data(ZK, ZKNode),
-    {reply, Data, State};
-handle_call({get_riak_clusters, Framework}, _From, State=#state{zk=ZK}) ->
-    ZKNode = lists:flatten(io_lib:format("/riak/frameworks/~s/clusters",[Framework])),
-    Children = get_children(ZK, ZKNode),
-    {reply, Children, State};
-handle_call({get_riak_cluster, Framework, Cluster}, _From, State=#state{zk=ZK}) ->
-    ZKNode = lists:flatten(io_lib:format("/riak/frameworks/~s/clusters/~s",[Framework, Cluster])),
-    Data = get_data(ZK, ZKNode),
-    {reply, Data, State};
-handle_call({get_riak_nodes, Framework, Cluster}, _From, State=#state{zk=ZK}) ->
-    ZKNode = coordinated_nodes_zknode(Framework, Cluster),
-    Nodes = do_get_riak_nodes(ZK, ZKNode),
-    {reply, Nodes, State};
-handle_call({get_proxy_status}, _From, State) ->
+handle_call({get_status}, _From, State=#state{framework=Framework, cluster=Cluster}) ->
     F1 = fun(St, Acc0) ->
         F2 = fun(Node, Acc1) ->
             N = [{id, Node#be.id},
@@ -139,23 +98,43 @@ handle_call({get_proxy_status}, _From, State) ->
         % {wait_list, St#bp_state.wait_list}],
         [P|Acc0]
     end,
-    Status = lists:foldl(F1, [], [
+    ProxyStatus = lists:foldl(F1, [], [
         bal_proxy:get_state(balance_http),
         bal_proxy:get_state(balance_protobuf)]),
-    {reply, Status, State};
-handle_call({synchronize_riak_nodes, Framework, Cluster}, _From, State=#state{zk=ZK}) ->
+
+    {WebHost, WebPort} = case riak_mesos_director:web_host_port() of
+        {H, P} -> {list_to_binary(H), P};
+        _ -> {undefined, undefined}
+    end,
+    {ZKHost, ZKPort} = case riak_mesos_director:zk_host_port() of
+        {ZH, ZP} -> {list_to_binary(ZH), ZP};
+        _ -> {undefined, undefined}
+    end,
     ZKNode = coordinated_nodes_zknode(Framework, Cluster),
-    Changes = do_synchronize_riak_nodes(ZK, ZKNode),
-    lager:info("Synchronized Riak nodes, changes: ~p", [Changes]),
-    {reply, Changes, State};
+
+    Status = [{proxy, ProxyStatus},
+     {web, [{enabled, riak_mesos_director:web_enabled()},
+            {host, WebHost},{port, WebPort}]},
+     {zookeeper, [{host, ZKHost},{port, ZKPort},{nodes_location, list_to_binary(ZKNode)}]}],
+    {reply, Status, State};
+handle_call({get_riak_frameworks}, _From, State=#state{zk=ZK}) ->
+    Children = get_children(ZK, "/riak/frameworks"),
+    {reply, Children, State};
+handle_call({get_riak_clusters}, _From, State=#state{zk=ZK, framework=Framework}) ->
+    ZKNode = lists:flatten(io_lib:format("/riak/frameworks/~s/clusters",[Framework])),
+    Children = get_children(ZK, ZKNode),
+    {reply, Children, State};
+handle_call({get_riak_nodes}, _From, State=#state{zk=ZK, framework=Framework, cluster=Cluster}) ->
+    ZKNode = coordinated_nodes_zknode(Framework, Cluster),
+    Nodes = do_get_riak_nodes(ZK, ZKNode),
+    {reply, Nodes, State};
 handle_call(Message, _From, State) ->
     lager:error("Received undefined message in call: ~p", [Message]),
     {reply, {error, undefined_message}, State}.
 
-handle_cast({watch_riak_nodes, Framework, Cluster}, State=#state{zk=ZK}) ->
-    ZKNode = coordinated_nodes_zknode(Framework, Cluster),
-    do_watch_riak_nodes(ZK, ZKNode),
-    {noreply, State};
+handle_cast({configure, Framework, Cluster}, State=#state{zk=ZK}) ->
+    do_configure(ZK, Framework, Cluster),
+    {noreply, State#state{framework=Framework, cluster=Cluster}};
 handle_cast(_Message, State) ->
     {noreply, State}.
 
@@ -310,3 +289,8 @@ safe_rpc(Node, Module, Function, Args, Timeout) ->
 riak_node_is_available(_, []) -> false;
 riak_node_is_available(Id, [[{name, Id}|_]|_]) -> true;
 riak_node_is_available(Id, [[{name, _}|_]|Rest]) -> riak_node_is_available(Id, Rest).
+
+do_configure(ZK, Framework, Cluster) ->
+    ZKNode = coordinated_nodes_zknode(Framework, Cluster),
+    do_synchronize_riak_nodes(ZK, ZKNode),
+    do_watch_riak_nodes(ZK, ZKNode).

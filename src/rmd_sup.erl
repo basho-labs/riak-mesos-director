@@ -48,12 +48,38 @@ init([]) ->
     RMD_SERVER = {rmd_server,
           {rmd_server, start_link, [zk_config()]},
           permanent, 5000, worker, [rmd_server]},
-    Processes = [HTTP_PROXY, PROTOBUF_PROXY, RMD_SERVER],
+    WEB = {webmachine_mochiweb,
+           {webmachine_mochiweb, start, [web_config()]},
+           permanent, 5000, worker, [mochiweb_socket_server]},
+    Processes0 = [HTTP_PROXY, PROTOBUF_PROXY, RMD_SERVER],
+
+    Processes = case riak_mesos_director:web_enabled() of
+        true -> Processes0 ++ [WEB];
+        _ -> Processes0
+    end,
+
     {ok, { {one_for_one, 10, 10}, Processes} }.
 
 %%%===================================================================
 %%% Private
 %%%===================================================================
+
+web_config() ->
+    {Ip, Port} = riak_mesos_director:web_host_port(),
+    WebConfig0 = [
+        {ip, Ip},
+        {port, Port},
+        {nodelay, true},
+        {log_dir, "log"},
+        {dispatch, rmd_wm:dispatch()}
+    ],
+    WebConfig1 = case application:get_env(riak_mesos_director, ssl) of
+        {ok, SSLOpts} ->
+            WebConfig0 ++ [{ssl, true}, {ssl_opts, SSLOpts}];
+        undefined ->
+            WebConfig0
+    end,
+    WebConfig1.
 
 proxy_http_config() ->
     {Ip, Port} = riak_mesos_director:proxy_http_host_port(),

@@ -23,7 +23,9 @@
 
 -export([start/2, stop/1]).
 
--export([zk_host_port/0,
+-export([web_enabled/0,
+         web_host_port/0,
+         zk_host_port/0,
          framework_name/0,
          cluster_name/0,
          proxy_http_host_port/0,
@@ -34,6 +36,18 @@
 %%%===================================================================
 %%% API
 %%%===================================================================
+
+web_enabled() ->
+    case application:get_env(riak_mesos_director, listener_web) of
+        {ok, true} -> true;
+        _ -> false
+    end.
+
+web_host_port() ->
+    case application:get_env(riak_mesos_director, listenter_web_http) of
+        {ok, {_, _} = HostPort} -> HostPort;
+        undefined -> {"0.0.0.0", 9000}
+    end.
 
 zk_host_port() ->
     case application:get_env(riak_mesos_director, zk_address) of

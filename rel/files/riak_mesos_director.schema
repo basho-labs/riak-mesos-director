@@ -1,5 +1,18 @@
 %%-*- mode: erlang -*-
 
+%% @doc When set to 'on', enables HTTP admin api.
+{mapping, "listener.web", "riak_mesos_director.listener_web", [
+  {default, on},
+  {datatype, flag}
+]}.
+
+%% @doc HTTP listener for director API
+{mapping, "listener.web.http", "riak_mesos_director.listenter_web_http", [
+  {default, {"{{riak_mesos_director_web_http_ip}}" , {{riak_mesos_director_web_http_port}} }},
+  {datatype, ip},
+  {validators, ["valid_host"]}
+]}.
+
 %% @doc HTTP proxy for Riak
 {mapping, "listener.proxy.http", "riak_mesos_director.listenter_proxy_http", [
   {default, {"{{riak_mesos_director_proxy_http_ip}}" , {{riak_mesos_director_proxy_http_port}} }},
