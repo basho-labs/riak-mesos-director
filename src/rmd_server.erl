@@ -27,7 +27,12 @@
          get_riak_frameworks/0,
          get_riak_clusters/0,
          get_riak_nodes/0]).
--export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
+-export([init/1,
+         handle_call/3,
+         handle_cast/2,
+         handle_info/2,
+         code_change/3,
+         terminate/2]).
 
 -include("riak_mesos_director.hrl").
 -include_lib("erlzk/include/erlzk.hrl").
@@ -64,10 +69,15 @@ get_riak_nodes() ->
 init([ZKHost, ZKPort, Framework, Cluster]) ->
     process_flag(trap_exit, true),
     {ok, ZK} = erlzk:connect([{ZKHost, ZKPort}], 30000),
-    do_configure(ZK, Framework, Cluster),
+    case do_configure(ZK, Framework, Cluster) of
+        {error, Reason} ->
+            lager:error("No nodes are available: ~p", [Reason]);
+        _ -> ok
+    end,
     {ok, #state{zk=ZK, framework=Framework, cluster=Cluster}}.
 
-handle_call({get_status}, _From, State=#state{framework=Framework, cluster=Cluster}) ->
+handle_call({get_status}, _From,
+        State=#state{framework=Framework, cluster=Cluster}) ->
     F1 = fun(St, Acc0) ->
         F2 = fun(Node, Acc1) ->
             N = [{id, Node#be.id},
@@ -115,16 +125,21 @@ handle_call({get_status}, _From, State=#state{framework=Framework, cluster=Clust
     Status = [{proxy, ProxyStatus},
      {web, [{enabled, riak_mesos_director:web_enabled()},
             {host, WebHost},{port, WebPort}]},
-     {zookeeper, [{host, ZKHost},{port, ZKPort},{nodes_location, list_to_binary(ZKNode)}]}],
+     {zookeeper, [{host, ZKHost},
+                  {port, ZKPort},
+                  {nodes_location, list_to_binary(ZKNode)}]}],
     {reply, Status, State};
 handle_call({get_riak_frameworks}, _From, State=#state{zk=ZK}) ->
     Children = get_children(ZK, "/riak/frameworks"),
     {reply, Children, State};
-handle_call({get_riak_clusters}, _From, State=#state{zk=ZK, framework=Framework}) ->
-    ZKNode = lists:flatten(io_lib:format("/riak/frameworks/~s/clusters",[Framework])),
+handle_call({get_riak_clusters}, _From,
+        State=#state{zk=ZK, framework=Framework}) ->
+    ZKNode = lists:flatten(
+        io_lib:format("/riak/frameworks/~s/clusters",[Framework])),
     Children = get_children(ZK, ZKNode),
     {reply, Children, State};
-handle_call({get_riak_nodes}, _From, State=#state{zk=ZK, framework=Framework, cluster=Cluster}) ->
+handle_call({get_riak_nodes}, _From,
+        State=#state{zk=ZK, framework=Framework, cluster=Cluster}) ->
     ZKNode = coordinated_nodes_zknode(Framework, Cluster),
     Nodes = do_get_riak_nodes(ZK, ZKNode),
     {reply, Nodes, State};
@@ -140,9 +155,11 @@ handle_cast(_Message, State) ->
 
 handle_info({'EXIT', _Pid, _Reason}, State) ->
     {noreply, State};
-handle_info({get_children, ZKNodeBin, node_children_changed}=Message, State=#state{zk=ZK}) ->
+handle_info({get_children, ZKNodeBin, node_children_changed}=Message,
+        State=#state{zk=ZK}) ->
     ZKNode = binary_to_list(ZKNodeBin),
-    lager:info("Received coordinated node change event: ~p. Synchronizing Riak Nodes...", [Message]),
+    lager:info("Received coordinated node change event: ~p. "
+        "Synchronizing Riak Nodes...", [Message]),
     Changes = do_synchronize_riak_nodes(ZK, ZKNode),
     lager:info("Synchronized Riak nodes, changes: ~p", [Changes]),
     erlzk:get_children(ZK, ZKNode, self()),
@@ -163,7 +180,8 @@ terminate(Reason, _State) ->
 %%%===================================================================
 
 coordinated_nodes_zknode(Framework, Cluster) ->
-    lists:flatten(io_lib:format("/riak/frameworks/~s/clusters/~s/coordinator/coordinatedNodes",[Framework, Cluster])).
+    Path = "/riak/frameworks/~s/clusters/~s/coordinator/coordinatedNodes",
+    lists:flatten(io_lib:format(Path,[Framework, Cluster])).
 
 do_get_riak_nodes(ZK, ZKNode0) ->
     CNodes = get_children(ZK, ZKNode0),
@@ -199,7 +217,13 @@ do_synchronize_riak_nodes(ZK, ZKNode) ->
               {http,[{host, Host}, {port, HTTPPort}]}], Acc0) ->
           Acc1 = case bal_proxy:get_host(balance_http, NodeName) of
               false ->
-                HTTPBe = #be{id=NodeName, name=binary_to_list(Host), port=HTTPPort, status=up, maxconn=1024, lasterr=no_error, lasterrtime=0},
+                HTTPBe = #be{id=NodeName,
+                             name=binary_to_list(Host),
+                             port=HTTPPort,
+                             status=up,
+                             maxconn=1024,
+                             lasterr=no_error,
+                             lasterrtime=0},
                 lager:info("Adding ~p to http proxy", [NodeName]),
                 bal_proxy:add_be(balance_http, HTTPBe, ""),
                 [{http, NodeName} | Acc0];
@@ -207,7 +231,13 @@ do_synchronize_riak_nodes(ZK, ZKNode) ->
           end,
           Acc2 = case bal_proxy:get_host(balance_protobuf, NodeName) of
               false ->
-                PBBe = #be{id=NodeName, name=binary_to_list(Host), port=PBPort, status=up, maxconn=1024, lasterr=no_error, lasterrtime=0},
+                PBBe = #be{id=NodeName,
+                           name=binary_to_list(Host),
+                           port=PBPort,
+                           status=up,
+                           maxconn=1024,
+                           lasterr=no_error,
+                           lasterrtime=0},
                 lager:info("Adding ~p to protobuf proxy", [NodeName]),
                 bal_proxy:add_be(balance_protobuf, PBBe, ""),
                 [{protobuf, NodeName} | Acc1];
@@ -254,7 +284,8 @@ get_children(ZK, ZKNode) ->
                 [list_to_binary(Child)|Acc] end,
             lists:foldl(F1, [], Children);
         {error, Reason} ->
-            lager:error("Error getting children at node ~p: ~p", [ZKNode, Reason]),
+            lager:error("Error getting children at node ~p: ~p",
+                [ZKNode, Reason]),
             []
     end.
 
@@ -288,9 +319,38 @@ safe_rpc(Node, Module, Function, Args, Timeout) ->
 
 riak_node_is_available(_, []) -> false;
 riak_node_is_available(Id, [[{name, Id}|_]|_]) -> true;
-riak_node_is_available(Id, [[{name, _}|_]|Rest]) -> riak_node_is_available(Id, Rest).
+riak_node_is_available(Id, [[{name, _}|_]|Rest]) ->
+    riak_node_is_available(Id, Rest).
+
+any_node_up(ZK, ZKNode0) ->
+    lager:info("Attempting to find Riak nodes at this ZKNode: ~p", [ZKNode0]),
+    CNodes = get_children(ZK, ZKNode0),
+    lager:info("Found these ZK node records: ~p", [CNodes]),
+
+    F1 = fun(CNode, Acc) ->
+        ZKNode1 = lists:flatten(io_lib:format("~s/~s",[ZKNode0, CNode])),
+        NodeJson = get_data(ZK, ZKNode1),
+        {struct,[{<<"NodeName">>,NodeName}]} = mochijson2:decode(NodeJson),
+        [_, Host] = string:tokens(binary_to_list(NodeName), "@"),
+        [{list_to_atom(binary_to_list(NodeName)), Host}|Acc] end,
+    NodeNames = lists:foldl(F1, [], CNodes),
+    lager:info("Found these NodeNames: ~p", [NodeNames]),
+
+    case NodeNames of
+        [] -> false;
+        [{ANode,_}|_] ->
+            case remote(ANode, erlang, node,[]) of
+                {badrpc, _} -> false;
+                _ -> true
+            end
+    end.
 
 do_configure(ZK, Framework, Cluster) ->
     ZKNode = coordinated_nodes_zknode(Framework, Cluster),
-    do_synchronize_riak_nodes(ZK, ZKNode),
-    do_watch_riak_nodes(ZK, ZKNode).
+    case any_node_up(ZK, ZKNode) of
+        true ->
+            do_synchronize_riak_nodes(ZK, ZKNode),
+            do_watch_riak_nodes(ZK, ZKNode);
+        _ ->
+            {error, no_nodes_up}
+    end.
