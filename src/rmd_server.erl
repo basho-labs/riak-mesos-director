@@ -69,11 +69,7 @@ get_riak_nodes() ->
 init([ZKHost, ZKPort, Framework, Cluster]) ->
     process_flag(trap_exit, true),
     {ok, ZK} = erlzk:connect([{ZKHost, ZKPort}], 30000),
-    case do_configure(ZK, Framework, Cluster) of
-        {error, Reason} ->
-            lager:error("No nodes are available: ~p", [Reason]);
-        _ -> ok
-    end,
+    do_configure(ZK, Framework, Cluster),
     {ok, #state{zk=ZK, framework=Framework, cluster=Cluster}}.
 
 handle_call({get_status}, _From,
@@ -189,20 +185,18 @@ do_get_riak_nodes(ZK, ZKNode0) ->
     F1 = fun(CNode, Acc) ->
         ZKNode1 = lists:flatten(io_lib:format("~s/~s",[ZKNode0, CNode])),
         NodeJson = get_data(ZK, ZKNode1),
-        {struct,[{<<"NodeName">>,NodeName}]} = mochijson2:decode(NodeJson),
-        [_, Host] = string:tokens(binary_to_list(NodeName), "@"),
-        [{list_to_atom(binary_to_list(NodeName)), Host}|Acc] end,
-    NodeNames = lists:foldl(F1, [], CNodes),
+        {struct,[{<<"NodeName">>,NodeName},
+                 {<<"DisterlPort">>,_DistErlPort},
+                 {<<"PBPort">>,PBPort},
+                 {<<"HTTPPort">>,HTTPPort},
+                 {<<"Hostname">>,HostName}]} = mochijson2:decode(NodeJson),
 
-    F2 = fun({NodeName, Host}, Acc) ->
-        {_, HTTPPort} = http_listener(NodeName),
-        {_, PBPort} = pb_listener(NodeName),
-        [[{name, NodeName},
+        [[{name, list_to_atom(binary_to_list(NodeName))},
          {protobuf,
-           [{host, list_to_binary(Host)}, {port, PBPort}]},
+           [{host, HostName}, {port, PBPort}]},
          {http,
-            [{host, list_to_binary(Host)}, {port, HTTPPort}]}]|Acc] end,
-    Nodes = lists:foldl(F2, [], NodeNames),
+            [{host, HostName}, {port, HTTPPort}]}]|Acc] end,
+    Nodes = lists:foldl(F1, [], CNodes),
     Nodes.
 
 do_synchronize_riak_nodes(ZK, ZKNode) ->
@@ -297,60 +291,24 @@ get_data(ZK, ZKNode) ->
             []
     end.
 
-http_listener(Node) ->
-    {ok,[{Ip,Port}]} = remote(Node, application, get_env, [riak_api, http]),
-    {Ip, Port}.
-
-pb_listener(Node) ->
-    {ok,[{Ip,Port}]} = remote(Node, application, get_env, [riak_api, pb]),
-    {Ip, Port}.
-
-remote(N, M, F, A) ->
-    safe_rpc(N, M, F, A, 60000).
-
-safe_rpc(Node, Module, Function, Args, Timeout) ->
-    try rpc:call(Node, Module, Function, Args, Timeout) of
-        Result ->
-            Result
-    catch
-        'EXIT':{noproc, _NoProcDetails} ->
-            {badrpc, rpc_process_down}
-    end.
+% remote(N, M, F, A) ->
+%     safe_rpc(N, M, F, A, 60000).
+%
+% safe_rpc(Node, Module, Function, Args, Timeout) ->
+%     try rpc:call(Node, Module, Function, Args, Timeout) of
+%         Result ->
+%             Result
+%     catch
+%         'EXIT':{noproc, _NoProcDetails} ->
+%             {badrpc, rpc_process_down}
+%     end.
 
 riak_node_is_available(_, []) -> false;
 riak_node_is_available(Id, [[{name, Id}|_]|_]) -> true;
 riak_node_is_available(Id, [[{name, _}|_]|Rest]) ->
     riak_node_is_available(Id, Rest).
 
-any_node_up(ZK, ZKNode0) ->
-    lager:info("Attempting to find Riak nodes at this ZKNode: ~p", [ZKNode0]),
-    CNodes = get_children(ZK, ZKNode0),
-    lager:info("Found these ZK node records: ~p", [CNodes]),
-
-    F1 = fun(CNode, Acc) ->
-        ZKNode1 = lists:flatten(io_lib:format("~s/~s",[ZKNode0, CNode])),
-        NodeJson = get_data(ZK, ZKNode1),
-        {struct,[{<<"NodeName">>,NodeName}]} = mochijson2:decode(NodeJson),
-        [_, Host] = string:tokens(binary_to_list(NodeName), "@"),
-        [{list_to_atom(binary_to_list(NodeName)), Host}|Acc] end,
-    NodeNames = lists:foldl(F1, [], CNodes),
-    lager:info("Found these NodeNames: ~p", [NodeNames]),
-
-    case NodeNames of
-        [] -> false;
-        [{ANode,_}|_] ->
-            case remote(ANode, erlang, node,[]) of
-                {badrpc, _} -> false;
-                _ -> true
-            end
-    end.
-
 do_configure(ZK, Framework, Cluster) ->
     ZKNode = coordinated_nodes_zknode(Framework, Cluster),
-    case any_node_up(ZK, ZKNode) of
-        true ->
-            do_synchronize_riak_nodes(ZK, ZKNode),
-            do_watch_riak_nodes(ZK, ZKNode);
-        _ ->
-            {error, no_nodes_up}
-    end.
+    do_synchronize_riak_nodes(ZK, ZKNode),
+    do_watch_riak_nodes(ZK, ZKNode).
