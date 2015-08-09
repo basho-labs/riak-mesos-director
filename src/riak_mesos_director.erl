@@ -37,46 +37,79 @@
 %%% API
 %%%===================================================================
 
-web_enabled() ->
-    case application:get_env(riak_mesos_director, listener_web) of
-        {ok, true} -> true;
-        _ -> false
-    end.
-
-web_host_port() ->
-    case application:get_env(riak_mesos_director, listenter_web_http) of
-        {ok, {_, _} = HostPort} -> HostPort;
-        undefined -> {"0.0.0.0", 9000}
-    end.
-
 zk_host_port() ->
-    case application:get_env(riak_mesos_director, zk_address) of
+    {DefaultH, DefaultP} = case application:get_env(riak_mesos_director, zk_address) of
         {ok, {_, _} = HostPort} -> HostPort;
         undefined -> {"33.33.33.2", 2181}
-    end.
-
-framework_name() ->
-    case application:get_env(riak_mesos_director, framework_name) of
-        {ok, FrameworkName} -> FrameworkName;
-        undefined -> exit("framework.name is a required value in director.conf")
-    end.
-
-cluster_name() ->
-    case application:get_env(riak_mesos_director, cluster_name) of
-        {ok, ClusterName} -> ClusterName;
-        undefined -> exit("framework.cluster is a required value in director.conf")
+    end,
+    case os:getenv("DIRECTOR_ZK") of
+        false -> {DefaultH, DefaultP};
+        ValueStr ->
+            [H,P] = string:tokens(ValueStr, ":"),
+            {H,list_to_integer(P)}
     end.
 
 proxy_http_host_port() ->
-    case application:get_env(riak_mesos_director, listenter_proxy_http) of
+    {Host, DefaultP} = case application:get_env(riak_mesos_director, listenter_proxy_http) of
         {ok, {_, _} = HostPort} -> HostPort;
         undefined -> {"0.0.0.0", 8098}
-    end.
+    end,
+    Port = case os:getenv("PORT0") of
+        false -> DefaultP;
+        P -> list_to_integer(P)
+    end,
+    {Host, Port}.
 
 proxy_protobuf_host_port() ->
-    case application:get_env(riak_mesos_director, listenter_proxy_protobuf) of
+    {Host, DefaultP} = case application:get_env(riak_mesos_director, listenter_proxy_protobuf) of
         {ok, {_, _} = HostPort} -> HostPort;
         undefined -> {"0.0.0.0", 8087}
+    end,
+    Port = case os:getenv("PORT1") of
+        false -> DefaultP;
+        P -> list_to_integer(P)
+    end,
+    {Host, Port}.
+
+web_enabled() ->
+    Default = case application:get_env(riak_mesos_director, listener_web) of
+        {ok, true} -> true;
+        _ -> false
+    end,
+    case os:getenv("DIRECTOR_WEB_ENABLED") of
+        false -> Default;
+        ValueStr -> list_to_atom(ValueStr)
+    end.
+
+web_host_port() ->
+    {Host, DefaultP} = case application:get_env(riak_mesos_director, listenter_web_http) of
+        {ok, {_, _} = HostPort} -> HostPort;
+        undefined -> {"0.0.0.0", 9000}
+    end,
+    Port = case os:getenv("PORT2") of
+        false -> DefaultP;
+        P -> list_to_integer(P)
+    end,
+    {Host, Port}.
+
+framework_name() ->
+    Default = case application:get_env(riak_mesos_director, framework_name) of
+        {ok, FrameworkName} -> FrameworkName;
+        undefined -> exit("framework.name is a required value in director.conf")
+    end,
+    case os:getenv("DIRECTOR_FRAMEWORK") of
+        false -> Default;
+        ValueStr -> ValueStr
+    end.
+
+cluster_name() ->
+    Default = case application:get_env(riak_mesos_director, cluster_name) of
+        {ok, ClusterName} -> ClusterName;
+        undefined -> exit("framework.cluster is a required value in director.conf")
+    end,
+    case os:getenv("DIRECTOR_CLUSTER") of
+        false -> Default;
+        ValueStr -> ValueStr
     end.
 
 %%%===================================================================

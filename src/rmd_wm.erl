@@ -43,6 +43,8 @@
     #ctx{method='GET', uri_end="clusters"}).
 -define(nodes(),
     #ctx{method='GET', uri_end="nodes"}).
+-define(health(),
+    #ctx{method='GET', uri_end="health"}).
 
 %%%===================================================================
 %%% API
@@ -53,7 +55,8 @@ routes() ->
       ["frameworks",framework,"clusters",cluster], % PUT
       ["frameworks"], % GET
       ["clusters"], % GET
-      ["nodes"]]. % GET
+      ["nodes"], % GET
+      ["health"]]. % GET
 
 dispatch() -> lists:map(fun(Route) -> {Route, ?MODULE, []} end, routes()).
 
@@ -96,6 +99,9 @@ resource_exists(RD, Ctx=?clusters()) ->
     {true, RD, Ctx#ctx{response=Response}};
 resource_exists(RD, Ctx=?nodes()) ->
     Response = [{nodes, rmd_server:get_riak_nodes()}],
+    {true, RD, Ctx#ctx{response=Response}};
+resource_exists(RD, Ctx=?health()) ->
+    Response = [{status, <<"OK">>}],
     {true, RD, Ctx#ctx{response=Response}};
 resource_exists(RD, Ctx) ->
     {false, RD, Ctx}.
