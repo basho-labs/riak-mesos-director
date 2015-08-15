@@ -70,6 +70,7 @@ init([ZKHost, ZKPort, Framework, Cluster]) ->
     process_flag(trap_exit, true),
     {ok, ZK} = erlzk:connect([{ZKHost, ZKPort}], 30000),
     do_configure(ZK, Framework, Cluster),
+    do_add_explorer(),
     {ok, #state{zk=ZK, framework=Framework, cluster=Cluster}}.
 
 handle_call({get_status}, _From,
@@ -312,3 +313,23 @@ do_configure(ZK, Framework, Cluster) ->
     ZKNode = coordinated_nodes_zknode(Framework, Cluster),
     do_synchronize_riak_nodes(ZK, ZKNode),
     do_watch_riak_nodes(ZK, ZKNode).
+
+do_add_explorer() ->
+    FName = riak_mesos_director:framework_name(),
+    Host = case os:getenv("FRAMEWORK_HOST") of
+        undefined -> FName ++ ".marathon.mesos";
+        H -> H
+    end,
+    Port = case os:getenv("FRAMEWORK_PORT") of
+        undefined -> 9000;
+        P -> list_to_integer(P)
+    end,
+    HTTPBe = #be{id=explorer,
+                 name=Host,
+                 port=Port,
+                 status=up,
+                 maxconn=1024,
+                 lasterr=no_error,
+                 lasterrtime=0},
+    lager:info("Adding ~p:~p to explorer proxy", [Host, Port]),
+    bal_proxy:add_be(explorer_proxy, HTTPBe, "").
