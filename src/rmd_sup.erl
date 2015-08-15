@@ -54,7 +54,7 @@ init([]) ->
     WEB = {webmachine_mochiweb,
            {webmachine_mochiweb, start, [web_config()]},
            permanent, 5000, worker, [mochiweb_socket_server]},
-    Processes0 = [HTTP_PROXY, PROTOBUF_PROXY, RMD_SERVER, EXPLORER_PROXY],
+    Processes0 = [HTTP_PROXY, PROTOBUF_PROXY, EXPLORER_PROXY, RMD_SERVER],
 
     Processes = case riak_mesos_director:web_enabled() of
         true -> Processes0 ++ [WEB];

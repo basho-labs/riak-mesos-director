@@ -332,4 +332,4 @@ do_add_explorer() ->
                  lasterr=no_error,
                  lasterrtime=0},
     lager:info("Adding ~p:~p to explorer proxy", [Host, Port]),
-    bal_proxy:add_be(explorer_proxy, HTTPBe, "").
+    bal_proxy:add_be(balance_explorer, HTTPBe, "").
