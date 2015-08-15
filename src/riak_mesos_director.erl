@@ -94,7 +94,7 @@ web_host_port() ->
     {Host, Port}.
 
 proxy_explorer_host_port() ->
-    {Host, DefaultP} = {"0.0.0.0", 9000},
+    {Host, DefaultP} = {"0.0.0.0", 9999},
     Port = case os:getenv("PORT3") of
         false -> DefaultP;
         P -> list_to_integer(P)

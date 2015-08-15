@@ -317,11 +317,11 @@ do_configure(ZK, Framework, Cluster) ->
 do_add_explorer() ->
     FName = riak_mesos_director:framework_name(),
     Host = case os:getenv("FRAMEWORK_HOST") of
-        undefined -> FName ++ ".marathon.mesos";
+        false -> FName ++ ".marathon.mesos";
         H -> H
     end,
     Port = case os:getenv("FRAMEWORK_PORT") of
-        undefined -> 9000;
+        false -> 10001;
         P -> list_to_integer(P)
     end,
     HTTPBe = #be{id=explorer,
