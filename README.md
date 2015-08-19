@@ -1,4 +1,11 @@
-# riak-mesos-director
+# Riak Mesos Director
+
+The Riak Mesos Director is part of the [Apache Mesos](http://mesos.apache.org/) framework for [Riak KV](http://basho.com/products/riak-kv/), a distributed NoSQL key-value data store that offers high availability, fault tolerance, operational simplicity, and scalability. 
+
+This repository is installed as part of the Mesos Framework, which is available [here](https://github.com/basho-labs/riak-mesos). There is no reason to build this project unless you would like to contribute to it.
+
+**Note:** This project is an early proof of concept. The code is in an alpha release and there may be bugs, incomplete features, incorrect documentation or other discrepancies.
+
 
 ## Build
 
