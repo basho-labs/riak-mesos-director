@@ -131,10 +131,18 @@ handle_call({get_riak_frameworks}, _From, State=#state{zk=ZK}) ->
     {reply, Children, State};
 handle_call({get_riak_clusters}, _From,
         State=#state{zk=ZK, framework=Framework}) ->
-    ZKNode = lists:flatten(
-        io_lib:format("/riak/frameworks/~s/clusters",[Framework])),
-    Children = get_children(ZK, ZKNode),
-    {reply, Children, State};
+    ZKNode = coordinated_nodes_zknode(Framework, ""),
+    CNodes = get_children(ZK, ZKNode),
+
+    F1 = fun(CNode, Acc) ->
+        ZKNode1 = lists:flatten(io_lib:format("~s/~s",[ZKNode, CNode])),
+        NodeJson = get_data(ZK, ZKNode1),
+        {struct,[_,{<<"ClusterName">>,NCluster},_,_,_,_,_]} = mochijson2:decode(NodeJson),
+        [NCluster|Acc]
+        end,
+    Nodes = lists:foldl(F1, [], CNodes),
+    Set = sets:from_list(Nodes),
+    {reply, sets:to_list(Set), State};
 handle_call({get_riak_nodes}, _From,
         State=#state{zk=ZK, framework=Framework, cluster=Cluster}) ->
     ZKNode = coordinated_nodes_zknode(Framework, Cluster),
