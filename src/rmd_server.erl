@@ -153,7 +153,7 @@ handle_cast(_Message, State) ->
 handle_info({'EXIT', _Pid, _Reason}, State) ->
     {noreply, State};
 handle_info({get_children, ZKNodeBin, node_children_changed}=Message,
-        State=#state{zk=ZK}) ->
+        State=#state{zk=ZK,framework=Framework, cluster=Cluster}) ->
     ZKNode = binary_to_list(ZKNodeBin),
     lager:info("Received coordinated node change event: ~p. "
         "Synchronizing Riak Nodes...", [Message]),
