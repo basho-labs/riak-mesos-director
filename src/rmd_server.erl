@@ -180,7 +180,7 @@ coordinated_nodes_zknode(Framework, _Cluster) ->
     Path = "/riak/frameworks/~s/coordinator/coordinatedNodes",
     lists:flatten(io_lib:format(Path,[Framework])).
 
-do_get_riak_nodes(ZK, ZKNode0, Framework, Cluster) ->
+do_get_riak_nodes(ZK, ZKNode0, _Framework, Cluster) ->
     CNodes = get_children(ZK, ZKNode0),
 
     F1 = fun(CNode, Acc) ->
