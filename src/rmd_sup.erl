@@ -38,6 +38,7 @@ start_link() ->
 %%%===================================================================
 
 init([]) ->
+    application:ensure_started(inets),
     application:set_env(balance, initial_be_list, []),
     HTTP_PROXY = {balance_http,
         {bal_proxy, start_link, [proxy_http_config()]},

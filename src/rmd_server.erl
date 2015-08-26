@@ -70,7 +70,7 @@ init([ZKHost, ZKPort, Framework, Cluster]) ->
     process_flag(trap_exit, true),
     {ok, ZK} = erlzk:connect([{ZKHost, ZKPort}], 30000),
     do_configure(ZK, Framework, Cluster),
-    do_add_explorer(),
+    do_add_explorer(ZK, Framework, Cluster),
     {ok, #state{zk=ZK, framework=Framework, cluster=Cluster}}.
 
 handle_call({get_status}, _From,
@@ -235,6 +235,7 @@ do_synchronize_riak_nodes(ZK, ZKNode, Framework, Cluster) ->
                              maxconn=1024,
                              lasterr=no_error,
                              lasterrtime=0},
+
                 lager:info("Adding ~p to http proxy", [NodeName]),
                 bal_proxy:add_be(balance_http, HTTPBe, ""),
                 [{http, NodeName} | Acc0];
@@ -330,7 +331,7 @@ do_configure(ZK, Framework, Cluster) ->
     do_synchronize_riak_nodes(ZK, ZKNode, Framework, Cluster),
     do_watch_riak_nodes(ZK, ZKNode).
 
-do_add_explorer() ->
+do_add_explorer(ZK, Framework, Cluster) ->
     FName = riak_mesos_director:framework_name(),
     Host = case os:getenv("FRAMEWORK_HOST") of
         false -> FName ++ ".marathon.mesos";
@@ -340,6 +341,15 @@ do_add_explorer() ->
         false -> 10001;
         P -> list_to_integer(P)
     end,
+
+    ZKNode = coordinated_nodes_zknode(Framework, Cluster),
+
+    case do_get_riak_nodes(ZK, ZKNode, "", Cluster) of
+        [[{name, NodeName},_,_]|_] ->
+            httpc:request(get, {"http://" ++ Host ++ ":" ++ integer_to_list(Port) ++ "/explore/nodes/" ++ atom_to_list(NodeName), []}, [], [{sync, false}]);
+        _ -> ok
+    end,
+
     HTTPBe = #be{id=explorer,
                  name=Host,
                  port=Port,
