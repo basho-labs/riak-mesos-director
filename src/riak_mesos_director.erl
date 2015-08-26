@@ -30,7 +30,10 @@
          cluster_name/0,
          proxy_http_host_port/0,
          proxy_protobuf_host_port/0,
-         proxy_explorer_host_port/0]).
+         proxy_explorer_host_port/0,
+         explorer_host_port/0,
+         explorer_host/0,
+         explorer_port/0]).
 
 -include("riak_mesos_director.hrl").
 
@@ -100,6 +103,23 @@ proxy_explorer_host_port() ->
         P -> list_to_integer(P)
     end,
     {Host, Port}.
+
+explorer_host_port() ->
+    explorer_host() ++ ":" ++ explorer_port().
+
+explorer_host() ->
+    Host = case os:getenv("FRAMEWORK_HOST") of
+        false -> framework_name() ++ ".marathon.mesos";
+        H -> H
+    end,
+    Host.
+
+explorer_port() ->
+    Port = case os:getenv("FRAMEWORK_PORT") of
+        false -> 9090;
+        P -> list_to_integer(P)
+    end,
+    Port.
 
 framework_name() ->
     Default = case application:get_env(riak_mesos_director, framework_name) of

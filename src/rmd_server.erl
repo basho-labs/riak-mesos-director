@@ -26,7 +26,8 @@
          configure/2,
          get_riak_frameworks/0,
          get_riak_clusters/0,
-         get_riak_nodes/0]).
+         get_riak_nodes/0,
+         touch_riak_explorer/0]).
 -export([init/1,
          handle_call/3,
          handle_cast/2,
@@ -61,6 +62,9 @@ get_riak_clusters() ->
 
 get_riak_nodes() ->
     gen_server:call(?MODULE, {get_riak_nodes}).
+
+touch_riak_explorer() ->
+    gen_server:cast(?MODULE, {touch_riak_explorer}).
 
 %%%===================================================================
 %%% Callbacks
@@ -152,6 +156,9 @@ handle_call(Message, _From, State) ->
     lager:error("Received undefined message in call: ~p", [Message]),
     {reply, {error, undefined_message}, State}.
 
+handle_cast({touch_riak_explorer}, State=#state{zk=ZK, framework=Framework, cluster=Cluster}) ->
+    do_touch_riak_explorer(ZK, Framework, Cluster),
+    {noreply, State};
 handle_cast({configure, Framework, Cluster}, State=#state{zk=ZK}) ->
     do_configure(ZK, Framework, Cluster),
     {noreply, State#state{framework=Framework, cluster=Cluster}};
@@ -331,24 +338,20 @@ do_configure(ZK, Framework, Cluster) ->
     do_synchronize_riak_nodes(ZK, ZKNode, Framework, Cluster),
     do_watch_riak_nodes(ZK, ZKNode).
 
-do_add_explorer(ZK, Framework, Cluster) ->
-    FName = riak_mesos_director:framework_name(),
-    Host = case os:getenv("FRAMEWORK_HOST") of
-        false -> FName ++ ".marathon.mesos";
-        H -> H
-    end,
-    Port = case os:getenv("FRAMEWORK_PORT") of
-        false -> 10001;
-        P -> list_to_integer(P)
-    end,
-
+do_touch_riak_explorer(ZK, Framework, Cluster) ->
     ZKNode = coordinated_nodes_zknode(Framework, Cluster),
+    HostPort = riak_mesos_director:explorer_host_port(),
 
     case do_get_riak_nodes(ZK, ZKNode, "", Cluster) of
         [[{name, NodeName},_,_]|_] ->
-            httpc:request(get, {"http://" ++ Host ++ ":" ++ integer_to_list(Port) ++ "/explore/nodes/" ++ atom_to_list(NodeName), []}, [], [{sync, false}]);
+            httpc:request(get, {"http://" ++ HostPort ++ "/explore/nodes/" ++ atom_to_list(NodeName), []}, [], [{sync, false}]);
         _ -> ok
-    end,
+    end.
+
+do_add_explorer(ZK, Framework, Cluster) ->
+    Host = riak_mesos_director:explorer_host(),
+    Port = riak_mesos_director:explorer_port(),
+    do_touch_riak_explorer(ZK, Framework, Cluster),
 
     HTTPBe = #be{id=explorer,
                  name=Host,

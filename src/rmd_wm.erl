@@ -101,6 +101,9 @@ resource_exists(RD, Ctx=?nodes()) ->
     Response = [{nodes, rmd_server:get_riak_nodes()}],
     {true, RD, Ctx#ctx{response=Response}};
 resource_exists(RD, Ctx=?health()) ->
+    %% Hacky: Keep the Riak explorer adhoc cluster up to date by hitting an endpoint which refreshes
+    %% the node list.
+    rmd_server:touch_riak_explorer(),
     Response = [{status, <<"OK">>}],
     {true, RD, Ctx#ctx{response=Response}};
 resource_exists(RD, Ctx) ->
