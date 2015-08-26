@@ -19,6 +19,8 @@ test: cleantest
 rel: relclean deps compile
 	$(REBAR) compile
 	$(REBAR) skip_deps=true generate $(OVERLAY_VARS)
+	tail -n +4 rel/riak_mesos_director/lib/env.sh > rel/riak_mesos_director/lib/env.sh.tmp && mv rel/riak_mesos_director/lib/env.sh.tmp rel/riak_mesos_director/lib/env.sh
+	cat env.sh.patch | cat - rel/riak_mesos_director/lib/env.sh > rel/riak_mesos_director/lib/env.sh.tmp && mv rel/riak_mesos_director/lib/env.sh.tmp rel/riak_mesos_director/lib/env.sh
 relclean:
 	rm -rf rel/riak_mesos_director
 stage: rel

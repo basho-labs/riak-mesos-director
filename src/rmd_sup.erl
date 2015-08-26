@@ -45,13 +45,16 @@ init([]) ->
     PROTOBUF_PROXY = {balance_protobuf,
         {bal_proxy, start_link, [proxy_protobuf_config()]},
         permanent, 5000, worker, [bal_proxy, tcp_proxy]},
+    EXPLORER_PROXY = {balance_explorer,
+        {bal_proxy, start_link, [proxy_explorer_config()]},
+        permanent, 5000, worker, [bal_proxy, tcp_proxy]},
     RMD_SERVER = {rmd_server,
           {rmd_server, start_link, [zk_config()]},
           permanent, 5000, worker, [rmd_server]},
     WEB = {webmachine_mochiweb,
            {webmachine_mochiweb, start, [web_config()]},
            permanent, 5000, worker, [mochiweb_socket_server]},
-    Processes0 = [HTTP_PROXY, PROTOBUF_PROXY, RMD_SERVER],
+    Processes0 = [HTTP_PROXY, PROTOBUF_PROXY, EXPLORER_PROXY, RMD_SERVER],
 
     Processes = case riak_mesos_director:web_enabled() of
         true -> Processes0 ++ [WEB];
@@ -80,6 +83,10 @@ web_config() ->
             WebConfig0
     end,
     WebConfig1.
+
+proxy_explorer_config() ->
+    {Ip, Port} = riak_mesos_director:proxy_explorer_host_port(),
+    [balance_explorer, Ip, Port, 5*1000,180*1000].
 
 proxy_http_config() ->
     {Ip, Port} = riak_mesos_director:proxy_http_host_port(),
