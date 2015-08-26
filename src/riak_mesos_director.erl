@@ -105,7 +105,7 @@ proxy_explorer_host_port() ->
     {Host, Port}.
 
 explorer_host_port() ->
-    explorer_host() ++ ":" ++ explorer_port().
+    explorer_host() ++ ":" ++ integer_to_list(explorer_port()).
 
 explorer_host() ->
     Host = case os:getenv("FRAMEWORK_HOST") of
