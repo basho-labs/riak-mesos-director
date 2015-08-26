@@ -137,7 +137,7 @@ handle_call({get_riak_clusters}, _From,
 handle_call({get_riak_nodes}, _From,
         State=#state{zk=ZK, framework=Framework, cluster=Cluster}) ->
     ZKNode = coordinated_nodes_zknode(Framework, Cluster),
-    Nodes = do_get_riak_nodes(ZK, ZKNode),
+    Nodes = do_get_riak_nodes(ZK, ZKNode, Framework, Cluster),
     {reply, Nodes, State};
 handle_call(Message, _From, State) ->
     lager:error("Received undefined message in call: ~p", [Message]),
@@ -156,7 +156,7 @@ handle_info({get_children, ZKNodeBin, node_children_changed}=Message,
     ZKNode = binary_to_list(ZKNodeBin),
     lager:info("Received coordinated node change event: ~p. "
         "Synchronizing Riak Nodes...", [Message]),
-    Changes = do_synchronize_riak_nodes(ZK, ZKNode),
+    Changes = do_synchronize_riak_nodes(ZK, ZKNode, Framework, Cluster),
     lager:info("Synchronized Riak nodes, changes: ~p", [Changes]),
     erlzk:get_children(ZK, ZKNode, self()),
     {noreply, State};
@@ -175,32 +175,40 @@ terminate(Reason, _State) ->
 %%% Private
 %%%===================================================================
 
-coordinated_nodes_zknode(Framework, Cluster) ->
-    Path = "/riak/frameworks/~s/clusters/~s/coordinator/coordinatedNodes",
-    lists:flatten(io_lib:format(Path,[Framework, Cluster])).
+coordinated_nodes_zknode(Framework, _Cluster) ->
+    Path = "/riak/frameworks/~s/coordinator/coordinatedNodes",
+    lists:flatten(io_lib:format(Path,[Framework])).
 
-do_get_riak_nodes(ZK, ZKNode0) ->
+do_get_riak_nodes(ZK, ZKNode0, Framework, Cluster) ->
     CNodes = get_children(ZK, ZKNode0),
 
     F1 = fun(CNode, Acc) ->
         ZKNode1 = lists:flatten(io_lib:format("~s/~s",[ZKNode0, CNode])),
         NodeJson = get_data(ZK, ZKNode1),
-        {struct,[{<<"NodeName">>,NodeName},
+        {struct,[{<<"FrameworkName">>,_NFramework},
+                 {<<"ClusterName">>,NCluster},
+                 {<<"NodeName">>,NodeName},
                  {<<"DisterlPort">>,_DistErlPort},
                  {<<"PBPort">>,PBPort},
                  {<<"HTTPPort">>,HTTPPort},
                  {<<"Hostname">>,HostName}]} = mochijson2:decode(NodeJson),
 
-        [[{name, list_to_atom(binary_to_list(NodeName))},
-         {protobuf,
-           [{host, HostName}, {port, PBPort}]},
-         {http,
-            [{host, HostName}, {port, HTTPPort}]}]|Acc] end,
+        case binary_to_list(NCluster) of
+            Cluster ->
+                [[{name, list_to_atom(binary_to_list(NodeName))},
+                 {protobuf,
+                   [{host, HostName}, {port, PBPort}]},
+                 {http,
+                    [{host, HostName}, {port, HTTPPort}]}]|Acc];
+            _ -> Acc
+        end
+
+        end,
     Nodes = lists:foldl(F1, [], CNodes),
     Nodes.
 
-do_synchronize_riak_nodes(ZK, ZKNode) ->
-    AvailableNodes = do_get_riak_nodes(ZK, ZKNode),
+do_synchronize_riak_nodes(ZK, ZKNode, Framework, Cluster) ->
+    AvailableNodes = do_get_riak_nodes(ZK, ZKNode, Framework, Cluster),
     HTTPSt = bal_proxy:get_state(balance_http),
     ProxyHTTPNodes = HTTPSt#bp_state.be_list,
     PBSt = bal_proxy:get_state(balance_protobuf),
@@ -310,5 +318,5 @@ riak_node_is_available(Id, [[{name, _}|_]|Rest]) ->
 
 do_configure(ZK, Framework, Cluster) ->
     ZKNode = coordinated_nodes_zknode(Framework, Cluster),
-    do_synchronize_riak_nodes(ZK, ZKNode),
+    do_synchronize_riak_nodes(ZK, ZKNode, Framework, Cluster),
     do_watch_riak_nodes(ZK, ZKNode).
