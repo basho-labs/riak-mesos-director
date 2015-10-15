@@ -24,6 +24,7 @@
 -export([service_available/2,
          allowed_methods/2,
          content_types_provided/2,
+         content_types_accepted/2,
          resource_exists/2,
          accept_content/2,
          provide_content/2]).
@@ -83,6 +84,10 @@ allowed_methods(RD, Ctx) ->
 
 content_types_provided(RD, Ctx) ->
     Types = [{"application/json", provide_content}],
+    {Types, RD, Ctx}.
+
+content_types_accepted(RD, Ctx) ->
+    Types = [{"application/json", accept_content}],
     {Types, RD, Ctx}.
 
 resource_exists(RD, Ctx=?status()) ->
