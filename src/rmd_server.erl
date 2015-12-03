@@ -84,7 +84,7 @@ handle_call({get_status}, _From,
             {pendconn, Node#be.pendconn},
             {actconn, Node#be.actconn},
             {lasterr, list_to_binary(lists:flatten(io_lib:format("~p",[Node#be.lasterr])))},
-            {lasterrtime, Node#be.lasterrtime},
+            {lasterrtime, datetime_str(Node#be.lasterrtime)},
             {act_count, Node#be.act_count},
             {act_time, Node#be.act_time}],
             % {pidlist, Node#be.pidlist}],
@@ -329,3 +329,11 @@ do_configure(ZK, Framework, Cluster) ->
     ZKNode = coordinated_nodes_zknode(Framework, Cluster),
     do_synchronize_riak_nodes(ZK, ZKNode, Framework, Cluster),
     do_watch_riak_nodes(ZK, ZKNode).
+
+datetime_str({_Mega, _Secs, _Micro}=Now) ->
+    datetime_str(calendar:now_to_datetime(Now));
+datetime_str({{Year, Month, Day}, {Hour, Min, Sec}}) ->
+    list_to_binary(lists:flatten(io_lib:format("~4..0B-~2..0B-~2..0B ~2..0B:~2..0B:~2..0B",
+                                 [Year,Month,Day,Hour,Min,Sec])));
+datetime_str(_) ->
+    null.
