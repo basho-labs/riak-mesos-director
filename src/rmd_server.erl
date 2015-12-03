@@ -26,8 +26,7 @@
          configure/2,
          get_riak_frameworks/0,
          get_riak_clusters/0,
-         get_riak_nodes/0,
-         touch_riak_explorer/0]).
+         get_riak_nodes/0]).
 -export([init/1,
          handle_call/3,
          handle_cast/2,
@@ -63,9 +62,6 @@ get_riak_clusters() ->
 get_riak_nodes() ->
     gen_server:call(?MODULE, {get_riak_nodes}).
 
-touch_riak_explorer() ->
-    gen_server:cast(?MODULE, {touch_riak_explorer}).
-
 %%%===================================================================
 %%% Callbacks
 %%%===================================================================
@@ -74,7 +70,6 @@ init([ZKHost, ZKPort, Framework, Cluster]) ->
     process_flag(trap_exit, true),
     {ok, ZK} = erlzk:connect([{ZKHost, ZKPort}], 30000),
     do_configure(ZK, Framework, Cluster),
-    do_add_explorer(ZK, Framework, Cluster),
     {ok, #state{zk=ZK, framework=Framework, cluster=Cluster}}.
 
 handle_call({get_status}, _From,
@@ -156,9 +151,6 @@ handle_call(Message, _From, State) ->
     lager:error("Received undefined message in call: ~p", [Message]),
     {reply, {error, undefined_message}, State}.
 
-handle_cast({touch_riak_explorer}, State=#state{zk=ZK, framework=Framework, cluster=Cluster}) ->
-    do_touch_riak_explorer(ZK, Framework, Cluster),
-    {noreply, State};
 handle_cast({configure, Framework, Cluster}, State=#state{zk=ZK}) ->
     do_configure(ZK, Framework, Cluster),
     {noreply, State#state{framework=Framework, cluster=Cluster}};
@@ -285,7 +277,7 @@ do_synchronize_riak_nodes(ZK, ZKNode, Framework, Cluster) ->
         case riak_node_is_available(NodeName, AvailableNodes) of
             false ->
                 lager:info("Removing ~p from protobuf proxy", [NodeName]),
-                bal_proxy:del_be(balance_pb, NodeName),
+                bal_proxy:del_be(balance_protobuf, NodeName),
                 [{protobuf, NodeName}|Acc0];
             _ -> Acc0
         end
@@ -337,28 +329,3 @@ do_configure(ZK, Framework, Cluster) ->
     ZKNode = coordinated_nodes_zknode(Framework, Cluster),
     do_synchronize_riak_nodes(ZK, ZKNode, Framework, Cluster),
     do_watch_riak_nodes(ZK, ZKNode).
-
-do_touch_riak_explorer(ZK, Framework, Cluster) ->
-    ZKNode = coordinated_nodes_zknode(Framework, Cluster),
-    HostPort = riak_mesos_director:explorer_host_port(),
-
-    case do_get_riak_nodes(ZK, ZKNode, "", Cluster) of
-        [[{name, NodeName},_,_]|_] ->
-            httpc:request(get, {"http://" ++ HostPort ++ "/explore/nodes/" ++ atom_to_list(NodeName), []}, [], [{sync, false}]);
-        _ -> ok
-    end.
-
-do_add_explorer(ZK, Framework, Cluster) ->
-    Host = riak_mesos_director:explorer_host(),
-    Port = riak_mesos_director:explorer_port(),
-    do_touch_riak_explorer(ZK, Framework, Cluster),
-
-    HTTPBe = #be{id=explorer,
-                 name=Host,
-                 port=Port,
-                 status=up,
-                 maxconn=1024,
-                 lasterr=no_error,
-                 lasterrtime=0},
-    lager:info("Adding ~p:~p to explorer proxy", [Host, Port]),
-    bal_proxy:add_be(balance_explorer, HTTPBe, "").

@@ -74,8 +74,6 @@ service_available(RD, Ctx0) ->
         cluster = wrq:path_info(cluster, RD),
         uri_end = lists:last(string:tokens(wrq:path(RD), "/")),
         method = wrq:method(RD)},
-
-    lager:info("CTX: ~p~n", [Ctx1]),
     {true, RD, Ctx1}.
 
 allowed_methods(RD, Ctx) ->
@@ -106,9 +104,6 @@ resource_exists(RD, Ctx=?nodes()) ->
     Response = [{nodes, rmd_server:get_riak_nodes()}],
     {true, RD, Ctx#ctx{response=Response}};
 resource_exists(RD, Ctx=?health()) ->
-    %% Hacky: Keep the Riak explorer adhoc cluster up to date by hitting an endpoint which refreshes
-    %% the node list.
-    rmd_server:touch_riak_explorer(),
     Response = [{status, <<"OK">>}],
     {true, RD, Ctx#ctx{response=Response}};
 resource_exists(RD, Ctx) ->
