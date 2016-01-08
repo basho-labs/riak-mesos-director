@@ -41,6 +41,7 @@ $(BUILD_DIR)/riak-mesos-director-$(OS_ARCH)-$(PACKAGE_VERSION).tar.gz: rel
 	cp -R rel/riak_mesos_director/* $(BUILD_DIR)/director/
 	echo "Thank you for downloading Riak Mesos Framework Director. Please visit https://github.com/basho-labs/riak-mesos-tools for usage information." > $(BUILD_DIR)/director/INSTALL.txt
 	cd $(BUILD_DIR) && tar -zcvf riak_mesos_director_$(OS_ARCH)_$(PACKAGE_VERSION).tar.gz director
+package: $(BUILD_DIR)/riak-mesos-director-$(OS_ARCH)-$(PACKAGE_VERSION).tar.gz
 sync: sync_director
 sync_director:
 	cd $(BUILD_DIR)/ && \
