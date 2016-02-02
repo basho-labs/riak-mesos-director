@@ -1,13 +1,17 @@
+REPO            ?= riak_mesos_director
+PKG_VERSION	    ?= $(shell git describe --tags --abbrev=0 | tr - .)
+MAJOR           ?= $(shell echo $(PKG_VERSION) | cut -d'.' -f1)
+MINOR           ?= $(shell echo $(PKG_VERSION) | cut -d'.' -f2)
+ARCH            ?= amd64
+OSNAME          ?= ubuntu
+OSVERSION       ?= trusty
+DEPLOY_BASE  ?= riak-tools/$(REPO)/$(MAJOR).$(MINOR)/$(PKG_VERSION)/$(OSNAME)/$(OSVERSION)/
+PKGNAME = $(REPO)-$(PKG_VERSION)-$(ARCH).tar.gz
+
 BASE_DIR            = $(shell pwd)
 ERLANG_BIN          = $(shell dirname $(shell which erl))
 REBAR               ?= $(BASE_DIR)/rebar
 OVERLAY_VARS        ?=
-PACKAGE_VERSION     ?= 0.3.0
-BUILD_DIR           ?= $(BASE_DIR)/_build
-export PROJECT_BASE ?= riak-mesos
-export DEPLOY_BASE  ?= riak-tools/$(PROJECT_BASE)
-export DEPLOY_OS    ?= ubuntu
-export OS_ARCH		  ?= linux_amd64
 
 .PHONY: deps
 
@@ -18,6 +22,8 @@ recompile:
 	$(REBAR) compile skip_deps=true
 deps:
 	$(REBAR) get-deps
+clean: cleantest relclean
+	-rm -rf packages
 cleantest:
 	rm -rf .eunit/*
 test: cleantest
@@ -34,20 +40,17 @@ stage: rel
 	$(foreach app,$(wildcard apps/*), rm -rf rel/riak_mesos_director/lib/$(shell basename $(app))-* && ln -sf $(abspath $(app)) rel/riak_mesos_director/lib;)
 
 
-### Director Package begin
-$(BUILD_DIR)/riak-mesos-director-$(OS_ARCH)-$(PACKAGE_VERSION).tar.gz: rel
-	-rm -rf $(BUILD_DIR)/director
-	mkdir -p $(BUILD_DIR)/director
-	cp -R rel/riak_mesos_director/* $(BUILD_DIR)/director/
-	echo "Thank you for downloading Riak Mesos Framework Director. Please visit https://github.com/basho-labs/riak-mesos-tools for usage information." > $(BUILD_DIR)/director/INSTALL.txt
-	cd $(BUILD_DIR) && tar -zcvf riak_mesos_director_$(OS_ARCH)_$(PACKAGE_VERSION).tar.gz director
-package: $(BUILD_DIR)/riak-mesos-director-$(OS_ARCH)-$(PACKAGE_VERSION).tar.gz
-sync: sync_director
-sync_director:
-	cd $(BUILD_DIR)/ && \
-		s3cmd put --acl-public riak_mesos_director_$(OS_ARCH)_$(PACKAGE_VERSION).tar.gz s3://$(DEPLOY_BASE)/$(DEPLOY_OS)/
-clean: clean_riak_mesos_director
-clean_riak_mesos_director:
-	-rm -rf $(BUILD_DIR)/riak-mesos-director-$(OS_ARCH)-$(PACKAGE_VERSION).tar.gz $(BUILD_DIR)/director
-### Director Package end
-
+##
+## Packaging targets
+##
+tarball: rel
+	echo "Creating packages/"$(PKGNAME)
+	mkdir -p packages
+	tar -C rel -czf $(PKGNAME) $(REPO)/
+	mv $(PKGNAME) packages/
+	cd packages && shasum -a 256 $(PKGNAME) > $(PKGNAME).sha
+sync:
+	echo "Uploading to "$(DEPLOY_BASE)
+	cd packages && \
+		s3cmd put --acl-public $(PKGNAME) s3://$(DEPLOY_BASE) && \
+		s3cmd put --acl-public $(PKGNAME).sha s3://$(DEPLOY_BASE)
