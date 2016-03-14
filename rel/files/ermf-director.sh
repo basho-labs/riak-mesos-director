@@ -8,7 +8,7 @@ main() {
     fi
 
     echo "Starting director..."
-    director/bin/director console -noinput #-no_epmd
+    riak_mesos_director/bin/director console -noinput #-no_epmd
 }
 
 main "$@"
