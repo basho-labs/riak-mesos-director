@@ -56,7 +56,7 @@ tarball: rel
 	mkdir -p packages
 	tar -C rel -czf $(PKGNAME) $(RELDIR)/
 	mv $(PKGNAME) packages/
-	cd packages && shasum -a 256 $(PKGNAME) > $(PKGNAME).sha
+	cd packages && $(SHASUM) $(PKGNAME) > $(PKGNAME).sha
 	cd packages && echo "$(DOWNLOAD_BASE)" > remote.txt
 	cd packages && echo "$(BASE_DIR)/packages/$(PKGNAME)" > local.txt
 
