@@ -3,7 +3,7 @@ RELDIR          ?= riak_mesos_director
 PKG_VERSION	    ?= $(shell git describe --tags --abbrev=0 | tr - .)
 ARCH            ?= amd64
 OS_FAMILY          ?= ubuntu
-OS_VERSION       ?= trusty
+OS_VERSION       ?= 14.04
 PKGNAME         ?= $(RELDIR)-$(PKG_VERSION)-$(OS_FAMILY)-$(OS_VERSION)-$(ARCH).tar.gz
 OAUTH_TOKEN     ?= $(shell cat oauth.txt)
 GIT_TAG   	    ?= $(shell git describe --tags --abbrev=0)
