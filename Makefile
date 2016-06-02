@@ -1,10 +1,9 @@
 REPO            ?= riak-mesos-director
 RELDIR          ?= riak_mesos_director
 PKG_VERSION	    ?= $(shell git describe --tags --abbrev=0 | tr - .)
-ARCH            ?= amd64
 OS_FAMILY          ?= ubuntu
 OS_VERSION       ?= 14.04
-PKGNAME         ?= $(RELDIR)-$(PKG_VERSION)-$(OS_FAMILY)-$(OS_VERSION)-$(ARCH).tar.gz
+PKGNAME         ?= $(RELDIR)-$(PKG_VERSION)-$(OS_FAMILY)-$(OS_VERSION).tar.gz
 OAUTH_TOKEN     ?= $(shell cat oauth.txt)
 GIT_TAG   	    ?= $(shell git describe --tags --abbrev=0)
 RELEASE_ID      ?= $(shell curl -sS https://api.github.com/repos/basho-labs/$(REPO)/releases/tags/$(GIT_TAG)?access_token=$(OAUTH_TOKEN) | python -c 'import sys, json; print json.load(sys.stdin)["id"]')
