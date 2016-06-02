@@ -66,7 +66,7 @@ sync-test:
 
 sync:
 	echo "Uploading to "$(DOWNLOAD_BASE)
-	cd packages && \
+	@cd packages && \
 		curl -sS -XPOST -H 'Content-Type: application/gzip' $(DEPLOY_BASE) --data-binary @$(PKGNAME) && \
 		curl -sS -XPOST -H 'Content-Type: application/octet-stream' $(DEPLOY_BASE).sha --data-binary @$(PKGNAME).sha
 
