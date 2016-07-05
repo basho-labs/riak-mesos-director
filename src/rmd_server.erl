@@ -66,9 +66,9 @@ get_riak_nodes() ->
 %%% Callbacks
 %%%===================================================================
 
-init([ZKHost, ZKPort, Framework, Cluster]) ->
+init([ZkNodesList, Framework, Cluster]) ->
     process_flag(trap_exit, true),
-    {ok, ZK} = erlzk:connect([{ZKHost, ZKPort}], 30000),
+    {ok, ZK} = erlzk:connect(ZkNodesList, 30000),
     do_configure(ZK, Framework, Cluster),
     {ok, #state{zk=ZK, framework=Framework, cluster=Cluster}}.
 
@@ -112,17 +112,15 @@ handle_call({get_status}, _From,
         {H, P} -> {list_to_binary(H), P};
         _ -> {undefined, undefined}
     end,
-    {ZKHost, ZKPort} = case riak_mesos_director:zk_host_port() of
-        {ZH, ZP} -> {list_to_binary(ZH), ZP};
-        _ -> {undefined, undefined}
-    end,
+    ZKHosts = [begin
+                   list_to_binary(NodeHost ++ ":" ++ integer_to_list(NodePort))
+               end || {NodeHost, NodePort} <- riak_mesos_director:zk_node_list()],
     ZKNode = coordinated_nodes_zknode(Framework, Cluster),
 
     Status = [{proxy, ProxyStatus},
      {web, [{enabled, riak_mesos_director:web_enabled()},
             {host, WebHost},{port, WebPort}]},
-     {zookeeper, [{host, ZKHost},
-                  {port, ZKPort},
+     {zookeeper, [{hosts, ZKHosts},
                   {nodes_location, list_to_binary(ZKNode)}]}],
     {reply, Status, State};
 handle_call({get_riak_frameworks}, _From, State=#state{zk=ZK}) ->
