@@ -40,7 +40,6 @@
 %%%===================================================================
 
 zk_node_list() ->
-
     Default = case application:get_env(riak_mesos_director, zk_address) of
                   {ok, {H, P}} -> H ++ integer_to_list(P);
                   undefined -> ?DEFAULT_ZK
