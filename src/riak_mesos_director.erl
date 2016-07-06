@@ -25,7 +25,7 @@
 
 -export([web_enabled/0,
          web_host_port/0,
-         zk_host_port/0,
+         zk_node_list/0,
          framework_name/0,
          cluster_name/0,
          proxy_http_host_port/0,
@@ -33,21 +33,27 @@
 
 -include("riak_mesos_director.hrl").
 
+-define(DEFAULT_ZK, "leader.mesos:2181").
+
 %%%===================================================================
 %%% API
 %%%===================================================================
 
-zk_host_port() ->
-    {DefaultH, DefaultP} = case application:get_env(riak_mesos_director, zk_address) of
-        {ok, {_, _} = HostPort} -> HostPort;
-        undefined -> {"33.33.33.2", 2181}
-    end,
-    case os:getenv("DIRECTOR_ZK") of
-        false -> {DefaultH, DefaultP};
-        ValueStr ->
-            [H,P] = string:tokens(ValueStr, ":"),
-            {H,list_to_integer(P)}
-    end.
+zk_node_list() ->
+    Default = case application:get_env(riak_mesos_director, zk_address) of
+                  {ok, {H, P}} -> H ++ integer_to_list(P);
+                  undefined -> ?DEFAULT_ZK
+              end,
+    {ZkNodes, _ZkPath} = case os:getenv("DIRECTOR_ZK") of
+                             false -> 
+                                 split_hosts(Default);
+                             ValueStr ->
+                                 split_hosts(ValueStr)
+                         end,
+    [begin
+         [NodeHost, NodePort] = string:tokens(Node, ":"),
+         {NodeHost, list_to_integer(NodePort)}
+     end || Node <- ZkNodes].
 
 proxy_http_host_port() ->
     {Host, DefaultP} = case application:get_env(riak_mesos_director, listenter_proxy_http) of
@@ -124,3 +130,14 @@ start(_Type, _StartArgs) ->
 
 stop(_State) ->
     ok.
+
+%%%===================================================================
+%%% Private
+%%%===================================================================
+
+-spec split_hosts(string()) -> {[string()], undefined | string()}.
+split_hosts("zk://" ++ Uri) ->
+    [Hosts | Path] = string:tokens(Uri, "/"),
+    {string:tokens(Hosts, ","), "/" ++ string:join(Path, "/")};
+split_hosts(Hosts) ->
+    {string:tokens(Hosts, ","), undefined}.

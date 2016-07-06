@@ -91,5 +91,7 @@ proxy_protobuf_config() ->
     [balance_protobuf, Ip, Port, 5*1000,180*1000].
 
 zk_config() ->
-    {Ip, Port} = riak_mesos_director:zk_host_port(),
-    [Ip, Port, riak_mesos_director:framework_name(), riak_mesos_director:cluster_name()].
+    FrameworkName = riak_mesos_director:framework_name(),
+    ClusterName = riak_mesos_director:cluster_name(),
+    ZkNodesList = riak_mesos_director:zk_node_list(),
+    [ZkNodesList, FrameworkName, ClusterName].
